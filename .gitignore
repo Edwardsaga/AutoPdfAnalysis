@@ -1,0 +1,64 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+*.egg
+pip-wheel-metadata/
+
+# Virtual environments
+venv/
+env/
+.venv/
+ENV/
+
+# Pytest
+.pytest_cache/
+
+# Mypy
+.mypy_cache/
+
+# Coverage
+.coverage
+coverage.*
+htmlcov/
+
+# Logs
+*.log
+
+# macOS
+.DS_Store
+
+# IDEs
+.vscode/
+.idea/
+
+# Temporary files
+*~
+*.swp
+
+# Python bytecode
+*.pyc
+*.pyo
+*.pyd
+
+# Local config
+.env
+local_settings.py
+
+# SDKs & other
+*.egg
+*.stackdump
+
+# Ignore build/products for VS
+*.suo
+*.user
+*.userosscache
+*.sln.docstates

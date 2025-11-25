@@ -1,0 +1,172 @@
+#!/usr/bin/env python3
+"""
+md_to_pdf.py
+Advanced Markdown to PDF converter using markdown + xhtml2pdf.
+
+Usage:
+  uv run src/md_to_pdf.py input.md output.pdf
+
+This script converts Markdown to HTML first, then renders it to PDF using xhtml2pdf.
+It supports:
+- Rich text formatting (bold, italic, code)
+- Tables
+- Images (local and remote)
+- Syntax highlighting (via pygments if available, else simple)
+- CJK font auto-detection for Chinese/Japanese/Korean support.
+"""
+import sys
+import os
+import logging
+from pathlib import Path
+import markdown
+from xhtml2pdf import pisa
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+def get_cjk_font_path():
+    """
+    Find a suitable CJK font path.
+    Checks CJK_FONT_PATH env var first, then common system locations.
+    """
+    env_path = os.environ.get('CJK_FONT_PATH')
+    if env_path and os.path.exists(env_path):
+        return env_path
+
+    # Common candidates for macOS, Linux, Windows
+    candidates = [
+        # macOS
+        '/System/Library/Fonts/PingFang.ttc',
+        '/Library/Fonts/Songti.ttc',
+        '/System/Library/Fonts/STHeiti Light.ttc',
+        '/System/Library/Fonts/AppleSDGothicNeo.ttc',
+        # Linux
+        '/usr/share/fonts/truetype/noto/NotoSansCJKsc-Regular.otf',
+        '/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc',
+        '/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc',
+        '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
+        # Windows
+        'C:\\Windows\\Fonts\\msyh.ttc', # Microsoft YaHei
+        'C:\\Windows\\Fonts\\simsun.ttc',
+    ]
+
+    for path in candidates:
+        if os.path.exists(path):
+            return path
+    
+    return None
+
+def convert_md_to_pdf(input_path, output_path):
+    if not os.path.exists(input_path):
+        logging.error(f"Input file not found: {input_path}")
+        sys.exit(1)
+
+    # 1. Read Markdown
+    with open(input_path, 'r', encoding='utf-8') as f:
+        text = f.read()
+
+    # 2. Convert to HTML
+    # Enable extensions for tables, fenced code blocks, etc.
+    html_content = markdown.markdown(
+        text, 
+        extensions=['tables', 'fenced_code', 'codehilite', 'toc', 'sane_lists']
+    )
+
+    # 3. Prepare CSS and Font
+    cjk_font_path = get_cjk_font_path()
+    font_face_css = ""
+    body_font_family = "Helvetica, sans-serif"
+    
+    if cjk_font_path:
+        logging.info(f"Using CJK font: {cjk_font_path}")
+        # xhtml2pdf requires a specific @font-face syntax
+        # We name the font 'CustomCJK'
+        font_face_css = f"""
+        @font-face {{
+            font-family: 'CustomCJK';
+            src: url('{cjk_font_path}');
+        }}
+        """
+        body_font_family = "'CustomCJK', Helvetica, sans-serif"
+    else:
+        logging.warning("No CJK font found. Non-Latin characters may not render correctly.")
+
+    # Professional CSS styling
+    css = f"""
+    <style>
+        {font_face_css}
+        @page {{
+            size: A4;
+            margin: 2cm;
+            @frame footer_frame {{
+                -pdf-frame-content: footerContent;
+                bottom: 1cm;
+                margin-left: 2cm;
+                margin-right: 2cm;
+                height: 1cm;
+            }}
+        }}
+        body {{
+            font-family: {body_font_family};
+            font-size: 10pt;
+            line-height: 1.5;
+            color: #333;
+        }}
+        h1 {{ font-size: 24pt; color: #2c3e50; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-top: 20px; }}
+        h2 {{ font-size: 18pt; color: #34495e; margin-top: 18px; margin-bottom: 10px; }}
+        h3 {{ font-size: 14pt; color: #455a64; margin-top: 15px; margin-bottom: 8px; }}
+        p {{ margin-bottom: 10px; text-align: justify; }}
+        code {{ font-family: Courier, monospace; background-color: #f4f4f4; padding: 2px 4px; border-radius: 3px; }}
+        pre {{ background-color: #f8f8f8; border: 1px solid #ddd; padding: 10px; border-radius: 5px; white-space: pre-wrap; word-wrap: break-word; }}
+        blockquote {{ border-left: 4px solid #3498db; padding-left: 15px; color: #7f8c8d; margin: 15px 0; }}
+        table { width: 100%; border-collapse: collapse; margin: 15px 0; table-layout: fixed; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; word-wrap: break-word; overflow-wrap: break-word; }
+        th { background-color: #f2f2f2; font-weight: bold; }
+        img {{ max-width: 100%; height: auto; margin: 10px 0; }}
+        ul, ol {{ margin-bottom: 10px; padding-left: 20px; }}
+        li {{ margin-bottom: 5px; }}
+    </style>
+    """
+
+    # 4. Construct Full HTML
+    full_html = f"""
+    <html>
+    <head>
+        <meta charset="utf-8">
+        {css}
+    </head>
+    <body>
+        {html_content}
+        <div id="footerContent" style="text-align:center; font-size:9pt; color:#888;">
+            Generated by Auto PDF Analysis Agent - <pdf:pagenumber>
+        </div>
+    </body>
+    </html>
+    """
+
+    # 5. Write PDF
+    with open(output_path, "wb") as result_file:
+        pisa_status = pisa.CreatePDF(
+            full_html,
+            dest=result_file,
+            encoding='utf-8'
+        )
+
+    if pisa_status.err:
+        logging.error("PDF generation failed")
+        sys.exit(1)
+    else:
+        logging.info(f"PDF successfully generated: {output_path}")
+
+def main():
+    if len(sys.argv) < 3:
+        print("Usage: uv run src/md_to_pdf.py <input.md> <output.pdf>")
+        sys.exit(1)
+    
+    input_md = sys.argv[1]
+    output_pdf = sys.argv[2]
+    
+    convert_md_to_pdf(input_md, output_pdf)
+
+if __name__ == "__main__":
+    main()
