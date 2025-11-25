@@ -62,3 +62,6 @@ local_settings.py
 *.user
 *.userosscache
 *.sln.docstates
+
+# Generated/analysis outputs
+output/
